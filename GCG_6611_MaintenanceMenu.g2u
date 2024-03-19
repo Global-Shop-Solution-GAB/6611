@@ -1,0 +1,219 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.FormMM..Create(BaseForm)
+Gui.FormMM..Caption("ARC 6611 - Linked Documents Autolaunch")
+Gui.FormMM..Size(453,300)
+Gui.FormMM..MinX(0)
+Gui.FormMM..MinY(0)
+Gui.FormMM..Position(0,0)
+Gui.FormMM..AlwaysOnTop(False)
+Gui.FormMM..FontName("Tahoma")
+Gui.FormMM..FontSize(8.25)
+Gui.FormMM..ControlBox(True)
+Gui.FormMM..MaxButton(True)
+Gui.FormMM..MinButton(True)
+Gui.FormMM..MousePointer(0)
+Gui.FormMM..Moveable(True)
+Gui.FormMM..Sizeable(True)
+Gui.FormMM..ShowInTaskBar(True)
+Gui.FormMM..TitleBar(True)
+Gui.FormMM..Event(UnLoad,FormMM_UnLoad)
+Gui.FormMM.gsgcMM.Create(GsGridControl)
+Gui.FormMM.gsgcMM.Enabled(True)
+Gui.FormMM.gsgcMM.Visible(True)
+Gui.FormMM.gsgcMM.Zorder(0)
+Gui.FormMM.gsgcMM.Size(423,220)
+Gui.FormMM.gsgcMM.Position(15,34)
+Gui.FormMM.gsgcMM.Anchor(15)
+Gui.FormMM.cmdSave.Create(Button)
+Gui.FormMM.cmdSave.Enabled(True)
+Gui.FormMM.cmdSave.Visible(True)
+Gui.FormMM.cmdSave.Zorder(0)
+Gui.FormMM.cmdSave.Size(58,23)
+Gui.FormMM.cmdSave.Position(380,7)
+Gui.FormMM.cmdSave.Caption("")
+Gui.FormMM.cmdSave.FontName("Tahoma")
+Gui.FormMM.cmdSave.FontSize(8.25)
+Gui.FormMM.cmdSave.Event(Click,cmdSave_Click)
+Gui.FormMM.cmdSave.SvgPicture("icon_save_all_color")
+Gui.FormMM.cmdSave.ImageAlign(8)
+Gui.FormMM.lbl1.Create(Label,"Select the categories to auto launch when clocking into a WO:",True,346,13,0,15,12,True,0,"Tahoma",8.25,,0,0)
+Gui.FormMM.lbl1.BorderStyle(0)
+Gui.FormMM.lbl1.FontStyle(True,False,False,False,False)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sError.Declare(String)
+
+Program.Sub.Preflight.End
+Program.Sub.Main.Start
+'Author: Arturo Almaguer
+'Date: 03 February 2022
+'Customer: Spectral Systems, quote number 13061
+'This program is the maintenance menu for ARC 6611. CMI created under Online System - Administration -  SFDC Linked Documents Maintenance [6611]
+
+Function.Intrinsic.UI.UsePixels ' Allows you to use Pixels instead of Twips throughout
+
+F.Intrinsic.Control.Try
+	
+	F.Intrinsic.Control.CallSub("CheckTable")
+	F.Intrinsic.Control.CallSub("LoadData")
+	F.Intrinsic.Control.CallSub("LoadGrid")
+	
+	GUI.FormMM..Show
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+Program.Sub.LoadData.Start
+'This subroutine loads the document control data
+F.Intrinsic.Control.Try
+
+	V.Local.sSQL.Declare(String)
+	
+	'Getting all document control categories
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.Data.DataTable.CreateFromSQL("dtDocGroups", "Con", "select GRP_ID, RTRIM(GRP_NAME) GRP_NAME, RTRIM(GRP_DESC) GRP_DESC from ATG_DOC_GRP", True)
+	f.Data.DataTable.AddColumn("dtDocGroups", "SELECT", "Boolean")
+	
+	'Getting autolauch flag for each document control category. 
+	'If this flag is on, it means that the actual ARC 6611 script will automatically open all documents from each group selected once a user clocks into a job
+	f.Data.Dictionary.CreateFromSQL("dictFlag", "Con", "select ID, AUTOLAUNCH from GCG_6611_MM;")
+	F.Data.Dictionary.SetDefaultReturn("dictFlag", False)
+	F.Data.DataTable.FillFromDictionary("dtDocGroups", "dictFlag", "GRP_ID", "SELECT")
+	F.Data.Dictionary.Close("dictFlag")
+	F.ODBC.Connection!Con.Close
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.LoadData.End
+Program.Sub.CheckTable.Start
+'This subroutine verifies if tables exists in DB, creates it if it doesn't
+F.Intrinsic.Control.Try
+
+	V.Local.bExists.Declare(Boolean)
+	
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.ODBC.Connection!Con.TableExists("GCG_6611_MM", V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists, =, False)
+			F.ODBC.Connection!Con.Execute("CREATE TABLE GCG_6611_MM (ID INTEGER, GROUP_NAME CHAR(50), AUTOLAUNCH BIT);")
+		F.Intrinsic.Control.EndIf
+	F.ODBC.Connection!Con.Close
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.CheckTable.End
+Program.Sub.LoadGrid.Start
+'This subroutine formats all the gv
+F.Intrinsic.Control.Try
+
+	GUI.FormMM.gsgcMM.AddGridviewFromDatatable("gvDocGroups","dtDocGroups")
+	
+	''General Gridview properties
+	GUI.FormMM.gsgcMM.SetGridviewProperty("gvDocGroups", V.Enum.GridViewPropertyNames!RowAutoHeight, True)
+	GUI.FormMM.gsgcMM.SetGridviewProperty("gvDocGroups", V.Enum.GridViewPropertyNames!EnableAppearanceOddRow, True)
+	GUI.FormMM.gsgcMM.SetGridviewProperty("gvDocGroups", V.Enum.GridViewPropertyNames!EnableAppearanceFocusedRow, True) 
+	
+	''Column properties
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_ID", V.Enum.ColumnPropertyNames!Caption, "ID")
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_NAME", V.Enum.ColumnPropertyNames!Caption, "Group Name")
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_DESC", V.Enum.ColumnPropertyNames!Caption, "Description")
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "SELECT", V.Enum.ColumnPropertyNames!Caption, "Select")
+	
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_ID", V.Enum.ColumnPropertyNames!HeaderFontBold, True)
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_NAME", V.Enum.ColumnPropertyNames!HeaderFontBold, True)
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_DESC", V.Enum.ColumnPropertyNames!HeaderFontBold, True)
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "SELECT", V.Enum.ColumnPropertyNames!HeaderFontBold, True)
+	
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_ID", V.Enum.ColumnPropertyNames!HeaderHAlignment, "Center")
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_NAME", V.Enum.ColumnPropertyNames!HeaderHAlignment, "Center")
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_DESC", V.Enum.ColumnPropertyNames!HeaderHAlignment, "Center")
+	GUI.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "SELECT", V.Enum.ColumnPropertyNames!HeaderHAlignment, "Center")
+	
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_ID", V.Enum.ColumnPropertyNames!MaxWidth, 50)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_NAME", V.Enum.ColumnPropertyNames!MinWidth, 90)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_DESC", V.Enum.ColumnPropertyNames!MinWidth, 130)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "SELECT", V.Enum.ColumnPropertyNames!MaxWidth, 50)
+	
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_ID", V.Enum.ColumnPropertyNames!AllowEdit, False)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_NAME", V.Enum.ColumnPropertyNames!AllowEdit, False)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_DESC", V.Enum.ColumnPropertyNames!AllowEdit, False)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "SELECT", V.Enum.ColumnPropertyNames!AllowEdit, True)
+	
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_ID", V.Enum.ColumnPropertyNames!ReadOnly, True)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_NAME", V.Enum.ColumnPropertyNames!ReadOnly, True)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "GRP_DESC", V.Enum.ColumnPropertyNames!ReadOnly, True)
+	Gui.FormMM.gsgcMM.SetColumnProperty("gvDocGroups", "SELECT", V.Enum.ColumnPropertyNames!ReadOnly, False)
+	
+	'Displaying gv
+	GUI.FormMM.gsgcMM.MainView("gvDocGroups")
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+
+Program.Sub.LoadGrid.End
+Program.Sub.cmdSave_Click.Start
+'This subroutine saves/updates data in the custom table after the user clicks on the Save button
+F.Intrinsic.Control.Try
+
+	V.Local.iCounter.Declare(Long)
+	V.Local.sSQL.Declare(String)
+	
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.Intrinsic.Control.For(V.Local.iCounter, 0, V.DataTable.dtDocGroups.RowCount--, 1)
+		
+		'Validating if group exists already in custom table. Updating data if it does, insert it if it doesn't
+		F.Intrinsic.String.Build("select * from GCG_6611_MM where ID = '{0}';", V.DataTable.dtDocGroups(V.Local.iCounter).GRP_ID!FieldVal, V.Local.sSQL)
+		F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSQL, V.Local.sSQL)
+		
+		F.Intrinsic.Control.If(V.Local.sSQL, =, "")
+			F.Intrinsic.String.Build("insert into GCG_6611_MM(ID, GROUP_NAME, AUTOLAUNCH) values('{0}','{1}','{2}');", V.DataTable.dtDocGroups(V.Local.iCounter).GRP_ID!FieldValTrim, V.DataTable.dtDocGroups(V.Local.iCounter).GRP_NAME!FieldValTrim, V.DataTable.dtDocGroups(V.Local.iCounter).SELECT!FieldValLong, V.Local.sSQL)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("update GCG_6611_MM set AUTOLAUNCH = '{0}' where ID = '{1}';", V.DataTable.dtDocGroups(V.Local.iCounter).SELECT!FieldValLong, V.DataTable.dtDocGroups(V.Local.iCounter).GRP_ID!FieldValTrim, V.Local.sSQL)
+		F.Intrinsic.Control.EndIf
+		
+		F.ODBC.Connection!Con.Execute(V.Local.sSQL)
+		
+	F.Intrinsic.Control.Next(V.Local.iCounter)
+	F.ODBC.Connection!Con.Close
+	
+	'Displaying msgbox to let the user know the changes have been saved
+	F.Intrinsic.UI.Msgbox("Values have been saved.")
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+Program.Sub.FormMM_UnLoad.Start
+'Closes the connection if it is open
+f.Intrinsic.Control.If(v.ODBC.con.exists,=,"1") 	
+    f.ODBC.Connection!Con.Close
+f.Intrinsic.Control.EndIf
+
+'Ending program
+F.Intrinsic.Control.End
+Program.Sub.FormMM_UnLoad.End
+Program.Sub.CatchError.Start
+'To display the error
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.SubroutineCalledFrom, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Global.sError) 
+F.Intrinsic.UI.Msgbox(V.Global.sError)
+F.Intrinsic.Control.CallSub("FormMM_UnLoad")
+Program.Sub.CatchError.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$apadilla$}$20220207103315045$}$Lag9STqBJOmNXSbd5+msRcBWPGz0aFqSzPePUG9qWbx2vLEnMFlGGLhB9pEZ3TMSXffV9Zry5snaUSduVpbc1Q==
+Program.Sub.Comments.End
