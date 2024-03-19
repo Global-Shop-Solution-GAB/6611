@@ -1,0 +1,84 @@
+﻿Program.Sub.Preflight.Start
+V.Global.sError.Declare(String)
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: Arturo Almaguer
+'Date: 03 February 2022
+'Customer: Spectral Systems, quote number 13061
+'This program automatically opens documents linked to a WO's part when clocking into the WO. 
+'The script is launched off Post Start Job 50782 hook in SFDC.Net screen
+
+Function.Intrinsic.UI.UsePixels ' Allows you to use Pixels instead of Twips throughout
+
+F.Intrinsic.Control.Try
+
+	V.Local.sWO.Declare(String)
+	V.Local.sJob.Declare(String)
+	V.Local.sSuffix.Declare(String)
+	V.Local.sSeq.Declare(String)
+	V.Local.sPart.Declare(String)
+	V.Local.sSQL.Declare(String)
+	V.Local.sLinkID.Declare(String)
+	V.Local.iLinkID.Declare(Long)
+	V.Local.iCounter.Declare(Long)
+	V.Local.sFilePath.Declare(String)
+	
+	'Setting up the variables passed from the WO the user clocked into
+	V.Local.sWO.Set(V.Passed.Job)
+	F.Intrinsic.String.Split(V.Local.sWO, "-", V.Local.sWO)
+	V.Local.sJob.Set(V.Local.sWO(0))
+	V.Local.sSuffix.Set(V.Local.sWO(1))
+	V.Local.sSeq.Set(V.Passed.Sequence)
+	
+	'Getting part linked to the WO
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.Intrinsic.String.Build("select RTRIM(PART) PART from V_JOB_HEADER where JOB = '{0}' and SUFFIX = '{1}';", V.Local.sJob, V.Local.sSuffix, V.Local.sSQL)
+	F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSQL, V.Local.sPart)
+	
+	'Getting the ID linked to the WO's part
+	F.Intrinsic.String.Build("select LINK_ID from LINK_DATA where TYPE = '00030' and ID = '{0}';", V.Local.sPart, V.Local.sSQL)
+	F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSQL, V.Local.sLinkID)
+	
+	'Converting ID to integer and creating dt from all documents that are in the categories that are checked in the maintenance menu
+	V.Local.iLinkID.Set(V.Local.sLinkID.Long)
+	F.Intrinsic.String.Build("select RTRIM(A.PATH) PATH, RTRIM(A.FILE) FILE from ATG_DOC_ASSOC A left join GCG_6611_MM B on A.GRP_ID = B.ID where A.LINK_ID = '{0}' and B.AUTOLAUNCH = '1';", V.Local.iLinkID, V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtDocs", "Con", V.Local.sSQL, True)
+	F.ODBC.Connection!Con.Close
+	
+	'Looping through dt to automatically open all documents in the user's sreen
+	F.Intrinsic.Control.For(V.Local.iCounter, 0, V.DataTable.dtDocs.RowCount--, 1) 
+		
+		'Building the file path and executing task
+		F.Intrinsic.String.Build("{0}\{1}", V.DataTable.dtDocs(V.Local.iCounter).PATH!FieldValTrim, V.DataTable.dtDocs(V.Local.iCounter).FILE!FieldValTrim, v.Local.sFilePath)
+		F.Intrinsic.Task.ShellExec(0,"",V.Local.sFilePath,"","",1)
+	
+	F.Intrinsic.Control.Next(V.Local.iCounter)
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+Program.Sub.CatchError.Start
+'To display the error
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.SubroutineCalledFrom, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Global.sError) 
+F.Intrinsic.UI.Msgbox(V.Global.sError)
+F.Intrinsic.Control.CallSub("Unload")
+Program.Sub.CatchError.End
+Program.Sub.Unload.Start
+'Closes the connection if it is open
+f.Intrinsic.Control.If(v.ODBC.con.exists,=,"1") 	
+    f.ODBC.Connection!Con.Close
+f.Intrinsic.Control.EndIf
+
+'Ending program
+F.Intrinsic.Control.End
+Program.Sub.Unload.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$apadilla$}$20220204164302355$}$Lag9STqBJOmNXSbd5+msRcBWPGz0aFqSzPePUG9qWbwJ2AU7pSprjg/FdXX0u8YIhNnL+UtSSeLc8sfkNxgFhA==
+Program.Sub.Comments.End
